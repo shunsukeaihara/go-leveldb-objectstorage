@@ -123,6 +123,12 @@ func unfoldTar(tarpath string, outdir string) error {
 }
 
 func (ldb *LevelDB) downloadFromS3(ctx context.Context, switching bool) newDB {
+	defer func() {
+		//finalize
+		ldb.mu.Lock()
+		ldb.downloading = false
+		defer ldb.mu.Unlock()
+	}()
 	var newDB *SwitchDB = nil
 	if ldb.dbConf.Type == "s3" {
 		newDB = ldb.downloadFromS3(ctx)
@@ -140,13 +146,6 @@ func (ldb *LevelDB) downloadFromS3(ctx context.Context, switching bool) newDB {
 }
 
 func (ldb *LevelDB) downloadFromS3(ctx context.Context) *SwitchDB {
-
-	defer func() {
-		//finalize
-		ldb.mu.Lock()
-		ldb.downloading = false
-		defer ldb.mu.Unlock()
-	}()
 	//download from S3
 	s3 := aws.S3(ctx, ldb.dbConf.S3.Region)
 	if s3 == nil {
