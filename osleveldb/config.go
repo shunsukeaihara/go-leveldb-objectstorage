@@ -10,8 +10,11 @@ type StorageGridFS struct {
 }
 
 type LevelDBConf struct {
-	Type    string
-	S3      *StorageS3
-	GridFS  *StorageGridFS
-	Options LevelDBOptions
+	Type     string
+	Name     string
+	DBPath   string
+	S3       *StorageS3
+	GridFS   *StorageGridFS
+	Options  LevelDBOptions
+	capacity int64
 }
