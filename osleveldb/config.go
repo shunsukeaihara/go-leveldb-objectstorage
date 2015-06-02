@@ -9,6 +9,12 @@ type StorageS3 struct {
 type StorageGridFS struct {
 }
 
+type LevelDBOptions struct {
+	CacheExpire    int
+	GcCount        int
+	UpdateInterval int
+}
+
 type LevelDBConf struct {
 	Type     string
 	Name     string
@@ -16,5 +22,5 @@ type LevelDBConf struct {
 	S3       *StorageS3
 	GridFS   *StorageGridFS
 	Options  LevelDBOptions
-	capacity int64
+	Capacity int64
 }
