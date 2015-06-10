@@ -27,7 +27,7 @@ type LdbMarshalFunc func(interface{}) ([]byte, error)
 
 type dbGetCmd struct {
 	key    string
-	fun    unmarshalFunc
+	fun    LdbUnmarshalFunc
 	result chan *dbResult
 	ttl    time.Duration
 }
