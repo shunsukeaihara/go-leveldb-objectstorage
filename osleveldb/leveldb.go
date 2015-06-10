@@ -11,47 +11,55 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/zenazn/goji/graceful"
 	"golang.org/x/net/context"
 )
 
 type LevelDB struct {
 	get         chan *dbGetCmd
-	switchDB    chan *SwitchDB
+	switching   chan *SwitchDB
 	exit        chan chan struct{}
 	reset       chan struct{}
 	expiration  chan struct{}
 	db          *leveldb.DB // LevelDB
 	dbpath      string
-	capasity    int64
 	cache       map[string]*cachedItem
 	downloading bool
 	mu          sync.RWMutex
 	dbConf      LevelDBConf
-	name        string
 }
 
-type SwitchDB struct {
+type switchDB struct {
 	db     *leveldb.DB
 	dbpath string
 }
 
-func NewLevelDB(db *leveldb.DB, name, dbpath string, capasity int64, dbConf config.LevelDB) *LevelDB {
-	return &LevelDB{
+func newLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelDB {
+	if dbConf.Options == nil {
+		// set defaut value
+		dbCong.Options = &defaultOption
+	}
+	ldb := LevelDB{
 		make(chan *dbGetCmd, 999),
-		make(chan *SwitchDB),
+		make(chan *switchDB),
 		make(chan chan struct{}),
 		make(chan struct{}),
 		make(chan struct{}),
-		db,
+		nil,
 		dbpath,
-		capasity,
 		map[string]*cachedItem{},
 		false,
 		sync.RWMutex{},
 		dbConf,
-		name,
 	}
+	return &ldb
+}
+
+func NewLevelDB(dbConf LevelDBConf) *LevelDB {
+	ldb := NewLevelDB(nil, ldbname, "", 0, dbConf)
+	newdb := ldb.download(false)
+	ldb = NewLevelDBWithDB(newdb.db, ldbname, newdb.dbpath, dbConf)
+	go ldb.run()
+	return &ldb
 }
 
 func (ldb *LevelDB) getFromLdb(cmd *dbGetCmd) *cachedItem {
@@ -79,9 +87,9 @@ func (ldb *LevelDB) simpleExpire(depth int) {
 		if val.hasExpired() {
 			//expired
 			delete(ldb.cache, key)
-			removed += 1
+			removed++
 		}
-		count += 1
+		count++
 		if count == ldb.dbConf.Options.GcCount {
 			break
 		}
@@ -122,40 +130,40 @@ func unfoldTar(tarpath string, outdir string) error {
 	return nil
 }
 
-func (ldb *LevelDB) downloadFromS3(ctx context.Context, switching bool) newDB {
+func (ldb *LevelDB) download(switching bool) newDB {
 	defer func() {
 		//finalize
 		ldb.mu.Lock()
 		ldb.downloading = false
 		defer ldb.mu.Unlock()
 	}()
-	var newDB *SwitchDB = nil
+	var newDB *SwitchDB
 	if ldb.dbConf.Type == "s3" {
-		newDB = ldb.downloadFromS3(ctx)
+		newDB = ldb.downloadFromS3()
 	}
 	//Switching the DB
 	if newDB == nil {
 		glog.Warning("can't download")
 		return nil
 	} else if switching {
-		ldb.switchDB <- newDB
+		ldb.switching <- newDB
 		return nil
 	} else {
 		return newDB
 	}
 }
 
-func (ldb *LevelDB) downloadFromS3(ctx context.Context) *SwitchDB {
+func (ldb *LevelDB) downloadFromS3() *SwitchDB {
 	//download from S3
-	s3 := aws.S3(ctx, ldb.dbConf.S3.Region)
+	s3 := CreateS3Client(ldb.dbConf.S3.Region)
 	if s3 == nil {
 		glog.Warning("can't connect to s3")
 		return nil
 	}
 	//save into temp file
-	os.MkdirAll("/tmp/ldb", 0700)
+	os.MkdirAll(ldb.dbConf.SaveDirPath, 0700)
 	dirname := uuid.NewUUID().String()
-	dirpath := path.Join("/tmp/soldb/", dirname)
+	dirpath := path.Join(ldb.dbConf.SaveDirPath, dirname)
 	tarpath := dirpath + ".tar"
 	err := s3.DownloadObject(ldb.dbConf.S3.Bucket, ldb.dbConf.S3.Path, tarpath)
 	if err != nil {
@@ -192,38 +200,33 @@ func (ldb *LevelDB) execGet(cmd *dbGetCmd) *dbResult {
 		result = cached
 		hit = true
 	}
+	// over capasity
+	if len(ldb.cache) > ldb.dbConf.Options.Capacity {
+		ldb.rest <- struct{}{}
+	}
 	return &dbResult{result.val, result.ok, hit}
 }
 
-func (ldb *LevelDB) run(ctx context.Context) {
-
-	graceful.PostHook(func() {
-		glog.Info("closing ", ldb.name, "...")
-		ch := make(chan struct{})
-		ldb.exit <- ch
-		<-ch
-		glog.Info("closed")
-	})
-
-	gcTick := time.NewTicker(10 * time.Second)
-	defer gcTick.Stop()
+func (ldb *LevelDB) run() {
+	expireTick := time.NewTicker(10 * time.Second)
+	defer expireTick.Stop()
 	updateTick := time.NewTicker(time.Duration(ldb.dbConf.Options.UpdateInterval) * time.Second)
 	defer updateTick.Stop()
 	for {
 		select {
-		case cmd := <-ldb.get:
-			cmd.result <- ldb.execGet(cmd)
 		case <-ldb.reset:
 			// Flush Cached data
 			ldb.cache = map[string]*cachedItem{}
+		case cmd := <-ldb.get:
+			cmd.result <- ldb.execGet(cmd)
 		case <-updateTick.C:
 			// downloading leveldb from object storage
 			ldb.mu.RLock()
 			if !ldb.downloading {
-				go ldb.download(ctx, true)
+				go ldb.download(true)
 			}
 			ldb.mu.RUnlock()
-		case msg := <-ldb.switchDB:
+		case msg := <-ldb.switching:
 			// swhitching
 			oldDB := ldb.db
 			oldPath := ldb.dbpath
@@ -233,7 +236,7 @@ func (ldb *LevelDB) run(ctx context.Context) {
 			os.RemoveAll(oldPath)
 		case <-ldb.expiration:
 			ldb.simpleExpire(1)
-		case <-gcTick.C:
+		case <-expireTick.C:
 			ldb.simpleExpire(1)
 		case msg := <-ldb.exit:
 			// finalize

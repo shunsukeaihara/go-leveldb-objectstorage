@@ -7,18 +7,13 @@ import (
 
 type cachedItem struct {
 	val     interface{}
-	ttl     int64
-	created int64
+	ttl     time.Duration
+	created time.Time
 	ok      bool
 }
 
 func (i *cachedItem) hasExpired() bool {
-	now := time.Now().Unix()
-	if now-i.created > i.ttl {
-		return true
-	} else {
-		return false
-	}
+	return time.Since(i.created) > i.ttl
 }
 
 type dbResult struct {
@@ -34,14 +29,15 @@ type dbGetCmd struct {
 	key    string
 	fun    unmarshalFunc
 	result chan *dbResult
-	ttl    int64 // sec -> ToDO: change to time.Duration
+	ttl    time.Duration
 }
 
 func NewDBGetCmd(key string, fun unmarshalFunc, ttl int64) *dbGetCmd {
+	// ttl -> second
 	return &dbGetCmd{
 		key,
 		fun,
 		make(chan *dbResult),
-		ttl + rand.Int63n(int64(ttl/10+1)),
+		time.Duration(ttl+rand.Int63n(int64(ttl/10+1))) * time.Second,
 	}
 }
