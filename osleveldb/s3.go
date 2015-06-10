@@ -18,13 +18,6 @@ type S3Client struct {
 	*s3.S3
 }
 
-type S3PutOptions struct {
-	Name        string
-	ContentType string
-	Size        int64
-	ACL         string // The canned ACL to apply to the object.
-}
-
 func CreateS3Client(region string) client {
 	s3Client := s3.New(&aws.Config{
 		Credentials: aws.DefaultChainCredentials,
