@@ -1,2 +1,8 @@
 # (WIP)go-leveldb-objectstorage
-readonly leveldb wrapper saved in object storage for golang
+Readonly leveldb wrapper saved in object storage for golang
+
+Now only supported for AWS S3 Object Storage.
+
+```
+go get github.com/shunsukeaihara/go-leveldb-objectstorage/osleveldb
+```

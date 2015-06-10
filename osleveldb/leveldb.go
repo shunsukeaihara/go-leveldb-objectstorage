@@ -54,9 +54,9 @@ func newLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelD
 }
 
 func NewLevelDB(dbConf LevelDBConf) *LevelDB {
-	ldb := NewLevelDB(nil, ldbname, "", 0, dbConf)
+	ldb := NewLevelDB(nil, dbConf.Name, "", 0, dbConf)
 	newdb := ldb.download(false)
-	ldb = NewLevelDBWithDB(newdb.db, ldbname, newdb.dbpath, dbConf)
+	ldb = NewLevelDBWithDB(newdb.db, dbConf.Name, newdb.dbpath, dbConf)
 	go ldb.run()
 	return &ldb
 }
@@ -139,6 +139,8 @@ func (ldb *LevelDB) download(switching bool) newDB {
 	var newDB *SwitchDB
 	if ldb.dbConf.Type == "s3" {
 		newDB = ldb.downloadFromS3()
+	} else {
+		return nil
 	}
 	//Switching the DB
 	if newDB == nil {
