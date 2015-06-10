@@ -22,8 +22,8 @@ type dbResult struct {
 	hit bool
 }
 
-type unmarshalFunc func([]byte) (interface{}, error)
-type marshalFunc func(interface{}) ([]byte, error)
+type LdbUnmarshalFunc func([]byte) (interface{}, error)
+type LdbMarshalFunc func(interface{}) ([]byte, error)
 
 type dbGetCmd struct {
 	key    string
@@ -32,7 +32,7 @@ type dbGetCmd struct {
 	ttl    time.Duration
 }
 
-func NewDBGetCmd(key string, fun unmarshalFunc, ttl int64) *dbGetCmd {
+func NewDBGetCmd(key string, fun LdbUnmarshalFunc, ttl int64) *dbGetCmd {
 	// ttl -> second
 	return &dbGetCmd{
 		key,

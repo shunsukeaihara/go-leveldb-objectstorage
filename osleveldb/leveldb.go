@@ -248,3 +248,19 @@ func (ldb *LevelDB) run() {
 		}
 	}
 }
+
+func (ldb *LevelDB) Get(key string, fun LdbUnmarshalFunc) (interface{}, bool, bool) {
+	cmd := NewDBGetCmd(key, fun, ldb.Config.Options.CacheExpire)
+	ldb.get <- cmd
+	r := <-cmd.result
+	if !r.ok {
+		return nil, false, false
+	}
+	return r.val, r.ok, r.hit
+}
+
+func (ldb *LevelDB) Stop() {
+	ch := make(chan struct{})
+	ldb.exit <- ch
+	<-ch
+}

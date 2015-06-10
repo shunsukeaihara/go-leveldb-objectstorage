@@ -10,9 +10,9 @@ type StorageGridFS struct {
 }
 
 type LevelDBOptions struct {
-	CacheExpire     int
-	ExpirationCount int
-	UpdateInterval  int
+	CacheExpire     int64
+	ExpirationCount int64
+	UpdateInterval  int64
 	Capacity        int64
 }
 
