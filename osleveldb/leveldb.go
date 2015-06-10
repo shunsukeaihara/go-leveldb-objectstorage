@@ -11,7 +11,6 @@ import (
 	"github.com/GoogleCloudPlatform/kubernetes/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
-	"golang.org/x/net/context"
 )
 
 type LevelDB struct {
