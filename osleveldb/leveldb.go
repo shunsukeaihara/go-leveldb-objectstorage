@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/Godeps/_workspace/src/code.google.com/p/go-uuid/uuid"
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -136,12 +135,8 @@ func (ldb *LevelDB) download(switching bool) *switchDB {
 		ldb.downloading = false
 		defer ldb.mu.Unlock()
 	}()
-	var newDB *switchDB
-	if ldb.dbConf.Type == "s3" {
-		newDB = ldb.downloadFromS3()
-	} else {
-		return nil
-	}
+	newDB := ldb.dbConf.Storage.Download(ldb.dbConf.SaveDirPath)
+
 	//Switching the DB
 	if newDB == nil {
 		glog.Warning("can't download")
@@ -152,39 +147,6 @@ func (ldb *LevelDB) download(switching bool) *switchDB {
 	} else {
 		return newDB
 	}
-}
-
-func (ldb *LevelDB) downloadFromS3() *switchDB {
-	//download from S3
-	s3 := CreateS3Client(ldb.dbConf.S3.Region)
-	if s3 == nil {
-		glog.Warning("can't connect to s3")
-		return nil
-	}
-	//save into temp file
-	os.MkdirAll(ldb.dbConf.SaveDirPath, 0700)
-	dirname := uuid.NewUUID().String()
-	dirpath := path.Join(ldb.dbConf.SaveDirPath, dirname)
-	tarpath := dirpath + ".tar"
-	err := s3.DownloadObject(ldb.dbConf.S3.Bucket, ldb.dbConf.S3.Path, tarpath)
-	if err != nil {
-		glog.Warning("download ", ldb.dbConf.S3.Path, " has failed\n")
-		return nil
-	}
-	// unfolding
-	err = unfoldTar(tarpath, dirpath)
-	if err != nil {
-		glog.Info("unforlding ", ldb.dbConf.S3.Path, " has failed\n")
-		return nil
-	}
-	os.RemoveAll(tarpath)
-	db, err := leveldb.OpenFile(dirpath, nil)
-	if err != nil {
-		glog.Info("opening ", ldb.dbConf.S3.Path, " has failed\n")
-		return nil
-	}
-	glog.Info("download ", ldb.dbConf.S3.Path, " done")
-	return &switchDB{db, dirpath}
 }
 
 func (ldb *LevelDB) execGet(cmd *dbGetCmd) *dbResult {

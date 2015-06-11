@@ -5,8 +5,8 @@ import (
 	"os"
 	"path"
 
-	"gopkg.in/kyokomi/aws-sdk-go.v1/aws"
-	"gopkg.in/kyokomi/aws-sdk-go.v1/service/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type S3Interface interface {

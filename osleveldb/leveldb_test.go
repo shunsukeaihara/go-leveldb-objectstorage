@@ -58,7 +58,7 @@ func BenchmarkRead10000Data(b *testing.B) {
 	makeDB(dbpath, 10000)
 	db, _ := leveldb.OpenFile(dbpath, nil)
 
-	conf := LevelDBConf{"s3", "test", testdbpath, nil, nil, nil}
+	conf := LevelDBConf{"test", testdbpath, nil, nil}
 
 	ldb := NewLevelDBWithDB(db, dbpath, conf)
 	go ldb.run()
@@ -81,7 +81,7 @@ func BenchmarkRead10000CachedData(b *testing.B) {
 	makeDB(dbpath, 10000)
 	db, _ := leveldb.OpenFile(dbpath, nil)
 
-	conf := LevelDBConf{"s3", "test", testdbpath, nil, nil, nil}
+	conf := LevelDBConf{"test", testdbpath, nil, nil}
 
 	ldb := NewLevelDBWithDB(db, dbpath, conf)
 	go ldb.run()
@@ -100,4 +100,8 @@ func BenchmarkRead10000CachedData(b *testing.B) {
 		key := fmt.Sprintf("testdata:%d", i)
 		ldb.Get(key, UnmarshalTestStruct)
 	}
+}
+
+func TestDownload(t *testing.T) {
+
 }
