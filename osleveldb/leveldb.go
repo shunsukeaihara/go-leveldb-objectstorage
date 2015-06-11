@@ -15,7 +15,7 @@ import (
 
 type LevelDB struct {
 	get         chan *dbGetCmd
-	switching   chan *SwitchDB
+	switching   chan *switchDB
 	exit        chan chan struct{}
 	reset       chan struct{}
 	expiration  chan struct{}
@@ -32,10 +32,10 @@ type switchDB struct {
 	dbpath string
 }
 
-func newLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelDB {
+func NewLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelDB {
 	if dbConf.Options == nil {
 		// set defaut value
-		dbCong.Options = &defaultOption
+		dbConf.Options = &defaultOption
 	}
 	ldb := LevelDB{
 		make(chan *dbGetCmd, 999),
@@ -43,7 +43,7 @@ func newLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelD
 		make(chan chan struct{}),
 		make(chan struct{}),
 		make(chan struct{}),
-		nil,
+		db,
 		dbpath,
 		map[string]*cachedItem{},
 		false,
@@ -54,11 +54,11 @@ func newLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelD
 }
 
 func NewLevelDB(dbConf LevelDBConf) *LevelDB {
-	ldb := NewLevelDB(nil, dbConf.Name, "", 0, dbConf)
+	ldb := NewLevelDBWithDB(nil, "", dbConf)
 	newdb := ldb.download(false)
-	ldb = NewLevelDBWithDB(newdb.db, dbConf.Name, newdb.dbpath, dbConf)
+	ldb = NewLevelDBWithDB(newdb.db, newdb.dbpath, dbConf)
 	go ldb.run()
-	return &ldb
+	return ldb
 }
 
 func (ldb *LevelDB) getFromLdb(cmd *dbGetCmd) *cachedItem {
@@ -66,14 +66,14 @@ func (ldb *LevelDB) getFromLdb(cmd *dbGetCmd) *cachedItem {
 	bytes, err := ldb.db.Get(key, nil)
 	if err != nil {
 		//key not found
-		return &cachedItem{nil, cmd.ttl, time.Now().Unix(), false}
+		return &cachedItem{nil, cmd.ttl, time.Now(), false}
 	}
 	obj, err2 := cmd.fun(bytes) //unmarshall
 	if err2 != nil {
-		glog.Errorf("data is broken\n")
-		return &cachedItem{nil, cmd.ttl, time.Now().Unix(), false}
+		glog.Errorf("data is broken")
+		return &cachedItem{nil, cmd.ttl, time.Now(), false}
 	}
-	return &cachedItem{obj, cmd.ttl, time.Now().Unix(), true}
+	return &cachedItem{obj, cmd.ttl, time.Now(), true}
 
 }
 
@@ -89,11 +89,11 @@ func (ldb *LevelDB) simpleExpire(depth int) {
 			removed++
 		}
 		count++
-		if count == ldb.dbConf.Options.GcCount {
+		if count == ldb.dbConf.Options.ExpirationCount {
 			break
 		}
 	}
-	if removed >= (ldb.dbConf.Options.GcCount/4) && depth < 5 {
+	if removed >= (ldb.dbConf.Options.ExpirationCount/4) && depth < 5 {
 		// retry
 		glog.Warning("one more gc!")
 		ldb.simpleExpire(depth + 1)
@@ -129,14 +129,14 @@ func unfoldTar(tarpath string, outdir string) error {
 	return nil
 }
 
-func (ldb *LevelDB) download(switching bool) newDB {
+func (ldb *LevelDB) download(switching bool) *switchDB {
 	defer func() {
 		//finalize
 		ldb.mu.Lock()
 		ldb.downloading = false
 		defer ldb.mu.Unlock()
 	}()
-	var newDB *SwitchDB
+	var newDB *switchDB
 	if ldb.dbConf.Type == "s3" {
 		newDB = ldb.downloadFromS3()
 	} else {
@@ -154,7 +154,7 @@ func (ldb *LevelDB) download(switching bool) newDB {
 	}
 }
 
-func (ldb *LevelDB) downloadFromS3() *SwitchDB {
+func (ldb *LevelDB) downloadFromS3() *switchDB {
 	//download from S3
 	s3 := CreateS3Client(ldb.dbConf.S3.Region)
 	if s3 == nil {
@@ -174,17 +174,17 @@ func (ldb *LevelDB) downloadFromS3() *SwitchDB {
 	// unfolding
 	err = unfoldTar(tarpath, dirpath)
 	if err != nil {
-		glog.Debug("unforlding ", ldb.dbConf.S3.Path, " has failed\n")
+		glog.Info("unforlding ", ldb.dbConf.S3.Path, " has failed\n")
 		return nil
 	}
 	os.RemoveAll(tarpath)
 	db, err := leveldb.OpenFile(dirpath, nil)
 	if err != nil {
-		glog.Debug("opening ", ldb.dbConf.S3.Path, " has failed\n")
+		glog.Info("opening ", ldb.dbConf.S3.Path, " has failed\n")
 		return nil
 	}
-	glog.Debug("download ", ldb.dbConf.S3.Path, " done")
-	return &SwitchDB{db, dirpath}
+	glog.Info("download ", ldb.dbConf.S3.Path, " done")
+	return &switchDB{db, dirpath}
 }
 
 func (ldb *LevelDB) execGet(cmd *dbGetCmd) *dbResult {
@@ -203,7 +203,7 @@ func (ldb *LevelDB) execGet(cmd *dbGetCmd) *dbResult {
 	}
 	// over capasity
 	if len(ldb.cache) > ldb.dbConf.Options.Capacity {
-		ldb.rest <- struct{}{}
+		ldb.reset <- struct{}{}
 	}
 	return &dbResult{result.val, result.ok, hit}
 }
@@ -251,7 +251,7 @@ func (ldb *LevelDB) run() {
 }
 
 func (ldb *LevelDB) Get(key string, fun LdbUnmarshalFunc) (interface{}, bool, bool) {
-	cmd := NewDBGetCmd(key, fun, ldb.Config.Options.CacheExpire)
+	cmd := NewDBGetCmd(key, fun, ldb.dbConf.Options.CacheExpire)
 	ldb.get <- cmd
 	r := <-cmd.result
 	if !r.ok {
@@ -260,7 +260,7 @@ func (ldb *LevelDB) Get(key string, fun LdbUnmarshalFunc) (interface{}, bool, bo
 	return r.val, r.ok, r.hit
 }
 
-func (ldb *LevelDB) Stop() {
+func (ldb *LevelDB) Exit() {
 	ch := make(chan struct{})
 	ldb.exit <- ch
 	<-ch

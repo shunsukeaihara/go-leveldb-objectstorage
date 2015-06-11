@@ -2,7 +2,6 @@ package osleveldb
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -18,12 +17,13 @@ type S3Client struct {
 	*s3.S3
 }
 
-func CreateS3Client(region string) client {
+func CreateS3Client(region string) *S3Client {
 	s3Client := s3.New(&aws.Config{
 		Credentials: aws.DefaultChainCredentials,
 		Region:      region,
 	})
 	client := &S3Client{s3Client}
+	return client
 }
 
 func (s *S3Client) DownloadObject(bucketName string, key string, out string) error {

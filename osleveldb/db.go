@@ -32,12 +32,12 @@ type dbGetCmd struct {
 	ttl    time.Duration
 }
 
-func NewDBGetCmd(key string, fun LdbUnmarshalFunc, ttl int64) *dbGetCmd {
+func NewDBGetCmd(key string, fun LdbUnmarshalFunc, ttl int) *dbGetCmd {
 	// ttl -> second
 	return &dbGetCmd{
 		key,
 		fun,
 		make(chan *dbResult),
-		time.Duration(ttl+rand.Int63n(int64(ttl/10+1))) * time.Second,
+		time.Duration(ttl+int(rand.Int63n(int64(ttl/10+1)))) * time.Second,
 	}
 }

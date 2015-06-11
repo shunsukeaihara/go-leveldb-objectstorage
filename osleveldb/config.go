@@ -10,10 +10,10 @@ type StorageGridFS struct {
 }
 
 type LevelDBOptions struct {
-	CacheExpire     int64
-	ExpirationCount int64
-	UpdateInterval  int64
-	Capacity        int64
+	CacheExpire     int
+	ExpirationCount int
+	UpdateInterval  int
+	Capacity        int
 }
 
 var defaultOption LevelDBOptions = LevelDBOptions{60, 100, 300, 100000}
@@ -24,5 +24,5 @@ type LevelDBConf struct {
 	SaveDirPath string
 	S3          *StorageS3
 	GridFS      *StorageGridFS
-	Options     LevelDBOptions
+	Options     *LevelDBOptions
 }
