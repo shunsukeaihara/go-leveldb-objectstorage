@@ -58,7 +58,7 @@ func BenchmarkRead10000Data(b *testing.B) {
 	makeDB(dbpath, 10000)
 	db, _ := leveldb.OpenFile(dbpath, nil)
 
-	conf := LevelDBConf{"test", testdbpath, nil, nil}
+	conf := LevelDBConf{"test", testdbpath, StorageS3{"", "", ""}, nil}
 
 	ldb := NewLevelDBWithDB(db, dbpath, conf)
 	go ldb.run()

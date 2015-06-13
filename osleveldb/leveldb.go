@@ -1,10 +1,7 @@
 package osleveldb
 
 import (
-	"archive/tar"
-	"io"
 	"os"
-	"path"
 	"sync"
 	"time"
 
@@ -99,35 +96,6 @@ func (ldb *LevelDB) simpleExpire(depth int) {
 	}
 }
 
-//unfolding tar file into target directory
-func unfoldTar(tarpath string, outdir string) error {
-	file, err := os.Open(tarpath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	reader := tar.NewReader(file)
-
-	var header *tar.Header
-	os.MkdirAll(outdir, 0700)
-	for {
-		header, err = reader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		out, err := os.Create(path.Join(outdir, path.Base(header.Name)))
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-		io.Copy(out, reader)
-	}
-	return nil
-}
-
 func (ldb *LevelDB) download(switching bool) *switchDB {
 	defer func() {
 		//finalize
@@ -212,7 +180,7 @@ func (ldb *LevelDB) run() {
 	}
 }
 
-func (ldb *LevelDB) Get(key string, fun LdbUnmarshalFunc) (interface{}, bool, bool) {
+func (ldb *LevelDB) Get(key string, fun UnmarshalFunc) (interface{}, bool, bool) {
 	cmd := NewDBGetCmd(key, fun, ldb.dbConf.Options.CacheExpire)
 	ldb.get <- cmd
 	r := <-cmd.result
