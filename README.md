@@ -1,5 +1,5 @@
 # (WIP)go-leveldb-objectstorage
-Readonly leveldb wrapper saved in object storage for golang
+Readonly wrapper for leveldb saved in object storage with cache for golang
 
 Now only supports AWS S3 Object Storage.
 
