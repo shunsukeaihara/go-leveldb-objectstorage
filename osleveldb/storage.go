@@ -19,6 +19,11 @@ type StorageS3 struct {
 	Region string
 	Bucket string
 	Path   string
+	client S3Interface
+}
+
+func NewStorageS3(region, bucket, path string) StorageS3 {
+	return StorageS3{region, bucket, path, CreateS3Client(region)}
 }
 
 //unfolding tar file into target directory
@@ -51,18 +56,12 @@ func unfoldTar(tarpath string, outdir string) error {
 }
 
 func (st StorageS3) Download(saveDirPath string) *switchDB {
-	//download from S3
-	s3 := CreateS3Client(st.Region)
-	if s3 == nil {
-		glog.Warning("can't connect to s3")
-		return nil
-	}
 	//save into temp file
 	os.MkdirAll(saveDirPath, 0700)
 	dirname := uuid.NewUUID().String()
 	dirpath := path.Join(saveDirPath, dirname)
 	tarpath := dirpath + ".tar"
-	err := s3.DownloadObject(st.Bucket, st.Path, tarpath)
+	err := st.client.DownloadObject(st.Bucket, st.Path, tarpath)
 	if err != nil {
 		glog.Warning("download ", st.Path, " has failed")
 		return nil

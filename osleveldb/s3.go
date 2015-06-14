@@ -10,7 +10,7 @@ import (
 )
 
 type S3Interface interface {
-	DownloadObject(bucketName string, key string, out string) error
+	DownloadObject(bucketName, key, out string) error
 }
 
 type S3Client struct {
@@ -26,7 +26,7 @@ func CreateS3Client(region string) *S3Client {
 	return client
 }
 
-func (s *S3Client) DownloadObject(bucketName string, key string, out string) error {
+func (s *S3Client) DownloadObject(bucketName, key, out string) error {
 
 	s3Req := &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),

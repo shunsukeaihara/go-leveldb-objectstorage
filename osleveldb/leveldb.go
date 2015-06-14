@@ -9,10 +9,11 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+//LevelDB wraps leveldb with cache and automaticaly update from object storage(such as S3).
 type LevelDB struct {
 	get         chan *dbGetCmd
 	switching   chan *switchDB
-	exit        chan chan struct{}
+	close       chan chan struct{}
 	reset       chan struct{}
 	expiration  chan struct{}
 	db          *leveldb.DB // LevelDB
@@ -28,6 +29,7 @@ type switchDB struct {
 	dbpath string
 }
 
+// NewLevelDBWithDB makes struct LevelDB with leveldb object and leveldb path.
 func NewLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelDB {
 	if dbConf.Options == nil {
 		// set defaut value
@@ -49,6 +51,7 @@ func NewLevelDBWithDB(db *leveldb.DB, dbpath string, dbConf LevelDBConf) *LevelD
 	return &ldb
 }
 
+// NewLevelDB makes struct LevelDB and download leveldb file from object storage.
 func NewLevelDB(dbConf LevelDBConf) *LevelDB {
 	ldb := NewLevelDBWithDB(nil, "", dbConf)
 	newdb := ldb.download(false)
@@ -169,7 +172,7 @@ func (ldb *LevelDB) run() {
 			ldb.simpleExpire(1)
 		case <-expireTick.C:
 			ldb.simpleExpire(1)
-		case msg := <-ldb.exit:
+		case msg := <-ldb.close:
 			// finalize
 			ldb.db.Close()
 			os.RemoveAll(ldb.dbpath)
@@ -180,6 +183,7 @@ func (ldb *LevelDB) run() {
 	}
 }
 
+// Get gets the value for the given key and unmarshaling by UnmarshalFunc from leveldb with cache.
 func (ldb *LevelDB) Get(key string, fun UnmarshalFunc) (interface{}, bool, bool) {
 	cmd := NewDBGetCmd(key, fun, ldb.dbConf.Options.CacheExpire)
 	ldb.get <- cmd
@@ -190,7 +194,8 @@ func (ldb *LevelDB) Get(key string, fun UnmarshalFunc) (interface{}, bool, bool)
 	return r.val, r.ok, r.hit
 }
 
-func (ldb *LevelDB) Exit() {
+// Close closes leveldb and deletes leveldb files.
+func (ldb *LevelDB) Close() {
 	ch := make(chan struct{})
 	ldb.exit <- ch
 	<-ch
